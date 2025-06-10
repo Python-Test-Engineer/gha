@@ -2,9 +2,9 @@ name: Complete Workflow Example
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -16,19 +16,18 @@ jobs:
       build-version: ${{ steps.version.outputs.version }}
       test-results: ${{ steps.test.outputs.results }}
       artifact-name: ${{ steps.artifact-info.outputs.name }}
-
+    
     steps:
       # Step 1: Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      # Step 2: Setup Node.js
+      
+      # Step 2: Setup Node.js (without cache since we don't have package.json)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-          cache: "npm"
-
+          node-version: '18'
+      
       # Step 3: Generate version number
       - name: Generate version
         id: version
@@ -36,34 +35,51 @@ jobs:
           VERSION="1.0.$(date +%Y%m%d)-${GITHUB_SHA::8}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Generated version: $VERSION"
-
-      # Step 4: Install dependencies (using output from previous step)
-      - name: Install dependencies
+      
+      # Step 4: Create package.json and install dependencies (using output from previous step)
+      - name: Setup project and install dependencies
         run: |
           echo "Building version: ${{ steps.version.outputs.version }}"
-          npm ci
-
+          
+          # Create a basic package.json for this example
+          cat > package.json << EOF
+          {
+            "name": "workflow-example",
+            "version": "${{ steps.version.outputs.version }}",
+            "type": "module",
+            "scripts": {
+              "test": "node tests/math.test.js"
+            }
+          }
+          EOF
+          
+          # For this example, we don't actually need npm packages
+          echo "Project setup complete"
+      
       # Step 5: Create a simple test file and run tests
       - name: Create test files
         run: |
           mkdir -p src tests
           echo 'export function add(a, b) { return a + b; }' > src/math.js
           echo 'import { add } from "../src/math.js"; console.log("Test result:", add(2, 3) === 5 ? "PASS" : "FAIL");' > tests/math.test.js
-
+      
       # Step 6: Run tests and capture results
       - name: Run tests
         id: test
         run: |
+          echo "Running tests..."
           TEST_OUTPUT=$(node tests/math.test.js 2>&1)
           echo "Test output: $TEST_OUTPUT"
           if [[ "$TEST_OUTPUT" == *"PASS"* ]]; then
             TEST_RESULT="success"
+            echo "✅ Tests passed!"
           else
             TEST_RESULT="failure"
+            echo "❌ Tests failed!"
           fi
           echo "results=$TEST_RESULT" >> $GITHUB_OUTPUT
           echo "test-output=$TEST_OUTPUT" >> $GITHUB_OUTPUT
-
+      
       # Step 7: Create build artifacts (using outputs from previous steps)
       - name: Create build artifacts
         id: artifact-info
@@ -73,14 +89,15 @@ jobs:
           echo "Test Results: ${{ steps.test.outputs.results }}" >> dist/build-info.txt
           echo "Build Date: $(date)" >> dist/build-info.txt
           echo "Commit: ${GITHUB_SHA}" >> dist/build-info.txt
-
-          # Copy source files
+          
+          # Copy source files and package.json
           cp -r src/* dist/ 2>/dev/null || true
-
+          cp package.json dist/ 2>/dev/null || true
+          
           ARTIFACT_NAME="build-${{ steps.version.outputs.version }}"
           echo "name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
           echo "Created artifact: $ARTIFACT_NAME"
-
+      
       # Step 8: Upload build artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -88,7 +105,7 @@ jobs:
           name: ${{ steps.artifact-info.outputs.name }}
           path: dist/
           retention-days: 30
-
+      
       # Step 9: Upload test results as separate artifact
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -107,7 +124,7 @@ jobs:
     if: needs.build-and-test.outputs.test-results == 'success'
     outputs:
       deployment-url: ${{ steps.deploy-step.outputs.url }}
-
+    
     steps:
       # Step 1: Download artifacts from previous job
       - name: Download build artifacts
@@ -115,7 +132,7 @@ jobs:
         with:
           name: ${{ needs.build-and-test.outputs.artifact-name }}
           path: downloaded-build/
-
+      
       # Step 2: Display job-to-job data transfer
       - name: Show inherited data
         run: |
@@ -129,44 +146,44 @@ jobs:
           echo ""
           echo "=== Build info content ==="
           cat downloaded-build/build-info.txt
-
+      
       # Step 3: Simulate deployment
       - name: Deploy application
         id: deploy-step
         run: |
           echo "Deploying version ${{ needs.build-and-test.outputs.build-version }}..."
-
+          
           # Simulate deployment process
           sleep 2
-
+          
           # Generate deployment URL
           DEPLOY_URL="https://app-${{ needs.build-and-test.outputs.build-version }}.example.com"
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
           echo "Deployed to: $DEPLOY_URL"
-
+      
       # Step 4: Create deployment report
       - name: Create deployment report
         run: |
           mkdir -p deployment-report
           cat > deployment-report/deployment-summary.md << EOF
           # Deployment Report
-
+          
           ## Build Information
           - **Version**: ${{ needs.build-and-test.outputs.build-version }}
           - **Test Results**: ${{ needs.build-and-test.outputs.test-results }}
           - **Deployment URL**: ${{ steps.deploy-step.outputs.url }}
           - **Deployed At**: $(date)
           - **Commit**: ${GITHUB_SHA}
-
+          
           ## Files Deployed
           \`\`\`
           $(ls -la downloaded-build/)
           \`\`\`
-
+          
           ## Deployment Status
           ✅ Successfully deployed to production
           EOF
-
+      
       # Step 5: Upload deployment report as artifact
       - name: Upload deployment report
         uses: actions/upload-artifact@v4
@@ -180,7 +197,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-and-test, deploy]
     if: always() # Run even if previous jobs fail
-
+    
     steps:
       # Step 1: Determine overall status
       - name: Determine workflow status
@@ -188,7 +205,7 @@ jobs:
         run: |
           BUILD_STATUS="${{ needs.build-and-test.result }}"
           DEPLOY_STATUS="${{ needs.deploy.result }}"
-
+          
           if [[ "$BUILD_STATUS" == "success" && "$DEPLOY_STATUS" == "success" ]]; then
             OVERALL_STATUS="success"
             STATUS_EMOJI="✅"
@@ -199,10 +216,10 @@ jobs:
             OVERALL_STATUS="partial"
             STATUS_EMOJI="⚠️"
           fi
-
+          
           echo "status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
           echo "emoji=$STATUS_EMOJI" >> $GITHUB_OUTPUT
-
+      
       # Step 2: Create notification summary (using step output)
       - name: Create notification
         run: |
@@ -215,11 +232,11 @@ jobs:
           echo "=== Build Information ==="
           echo "Version: ${{ needs.build-and-test.outputs.build-version }}"
           echo "Test Results: ${{ needs.build-and-test.outputs.test-results }}"
-
+          
           if [[ "${{ needs.deploy.result }}" == "success" ]]; then
             echo "Deployment URL: ${{ needs.deploy.outputs.deployment-url }}"
           fi
-
+      
       # Step 3: Create final summary artifact
       - name: Create workflow summary
         run: |
@@ -236,7 +253,7 @@ jobs:
             "completed_at": "$(date -Iseconds)"
           }
           EOF
-
+      
       # Step 4: Upload final summary
       - name: Upload workflow summary
         uses: actions/upload-artifact@v4
