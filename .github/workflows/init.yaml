@@ -1,263 +1,160 @@
-name: Complete Workflow Example
+name: Simple Outputs and Artifacts Demo
 
 on:
   push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  # First job - Build and test
-  build-and-test:
+  # Job 1: Create data and artifacts
+  job1:
     runs-on: ubuntu-latest
     outputs:
-      # Job outputs - these can be used by other jobs
-      build-version: ${{ steps.version.outputs.version }}
-      test-results: ${{ steps.test.outputs.results }}
-      artifact-name: ${{ steps.artifact-info.outputs.name }}
+      # Pass these outputs to other jobs
+      message: ${{ steps.step2.outputs.message }}
+      timestamp: ${{ steps.step1.outputs.timestamp }}
+      file-name: ${{ steps.step3.outputs.filename }}
     
     steps:
-      # Step 1: Checkout code
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      # Step 2: Setup Node.js (without cache since we don't have package.json)
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
-      # Step 3: Generate version number
-      - name: Generate version
-        id: version
+      # Step 1: Generate timestamp
+      - name: Step 1 - Generate timestamp
+        id: step1
         run: |
-          VERSION="1.0.$(date +%Y%m%d)-${GITHUB_SHA::8}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Generated version: $VERSION"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          echo "timestamp=$TIMESTAMP" >> $GITHUB_OUTPUT
+          echo "Generated timestamp: $TIMESTAMP"
       
-      # Step 4: Create package.json and install dependencies (using output from previous step)
-      - name: Setup project and install dependencies
+      # Step 2: Create message using output from step 1
+      - name: Step 2 - Create message
+        id: step2
         run: |
-          echo "Building version: ${{ steps.version.outputs.version }}"
+          MESSAGE="Hello from ${{ steps.step1.outputs.timestamp }}"
+          echo "message=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "Created message: $MESSAGE"
+      
+      # Step 3: Create files using outputs from previous steps
+      - name: Step 3 - Create files
+        id: step3
+        run: |
+          mkdir -p output
           
-          # Create a basic package.json for this example
-          cat > package.json << EOF
-          {
-            "name": "workflow-example",
-            "version": "${{ steps.version.outputs.version }}",
-            "type": "module",
-            "scripts": {
-              "test": "node tests/math.test.js"
-            }
-          }
-          EOF
+          FILENAME="data-${{ steps.step1.outputs.timestamp }}.txt"
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
           
-          # For this example, we don't actually need npm packages
-          echo "Project setup complete"
-      
-      # Step 5: Create a simple test file and run tests
-      - name: Create test files
-        run: |
-          mkdir -p src tests
-          echo 'export function add(a, b) { return a + b; }' > src/math.js
-          echo 'import { add } from "../src/math.js"; console.log("Test result:", add(2, 3) === 5 ? "PASS" : "FAIL");' > tests/math.test.js
-      
-      # Step 6: Run tests and capture results
-      - name: Run tests
-        id: test
-        run: |
-          echo "Running tests..."
-          TEST_OUTPUT=$(node tests/math.test.js 2>&1)
-          echo "Test output: $TEST_OUTPUT"
-          if [[ "$TEST_OUTPUT" == *"PASS"* ]]; then
-            TEST_RESULT="success"
-            echo "✅ Tests passed!"
-          else
-            TEST_RESULT="failure"
-            echo "❌ Tests failed!"
-          fi
-          echo "results=$TEST_RESULT" >> $GITHUB_OUTPUT
-          echo "test-output=$TEST_OUTPUT" >> $GITHUB_OUTPUT
-      
-      # Step 7: Create build artifacts (using outputs from previous steps)
-      - name: Create build artifacts
-        id: artifact-info
-        run: |
-          mkdir -p dist
-          echo "Version: ${{ steps.version.outputs.version }}" > dist/build-info.txt
-          echo "Test Results: ${{ steps.test.outputs.results }}" >> dist/build-info.txt
-          echo "Build Date: $(date)" >> dist/build-info.txt
-          echo "Commit: ${GITHUB_SHA}" >> dist/build-info.txt
+          # Create file with data from previous steps
+          echo "Timestamp: ${{ steps.step1.outputs.timestamp }}" > output/$FILENAME
+          echo "Message: ${{ steps.step2.outputs.message }}" >> output/$FILENAME
+          echo "Run Number: ${{ github.run_number }}" >> output/$FILENAME
           
-          # Copy source files and package.json
-          cp -r src/* dist/ 2>/dev/null || true
-          cp package.json dist/ 2>/dev/null || true
-          
-          ARTIFACT_NAME="build-${{ steps.version.outputs.version }}"
-          echo "name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
-          echo "Created artifact: $ARTIFACT_NAME"
+          echo "Created file: $FILENAME"
       
-      # Step 8: Upload build artifacts
-      - name: Upload build artifacts
+      # Step 4: Upload as artifact
+      - name: Step 4 - Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifact-info.outputs.name }}
-          path: dist/
-          retention-days: 30
-      
-      # Step 9: Upload test results as separate artifact
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-${{ github.run_number }}
-          path: |
-            tests/
-            dist/build-info.txt
-          retention-days: 7
+          name: job1-output
+          path: output/
 
-  # Second job - Deploy (depends on first job)
-  deploy:
+  # Job 2: Use outputs from job 1 and download artifacts
+  job2:
     runs-on: ubuntu-latest
-    needs: build-and-test
-    # Only run deploy if tests passed
-    if: needs.build-and-test.outputs.test-results == 'success'
+    needs: job1
     outputs:
-      deployment-url: ${{ steps.deploy-step.outputs.url }}
+      processed-message: ${{ steps.process.outputs.result }}
     
     steps:
-      # Step 1: Download artifacts from previous job
-      - name: Download build artifacts
+      # Step 1: Show job-to-job data passing
+      - name: Step 1 - Display inherited data
+        run: |
+          echo "=== Data from Job 1 ==="
+          echo "Timestamp: ${{ needs.job1.outputs.timestamp }}"
+          echo "Message: ${{ needs.job1.outputs.message }}"
+          echo "File name: ${{ needs.job1.outputs.file-name }}"
+      
+      # Step 2: Download artifact from job 1
+      - name: Step 2 - Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.build-and-test.outputs.artifact-name }}
-          path: downloaded-build/
+          name: job1-output
+          path: downloaded/
       
-      # Step 2: Display job-to-job data transfer
-      - name: Show inherited data
+      # Step 3: Process downloaded files
+      - name: Step 3 - Process downloaded files
+        id: process
         run: |
-          echo "=== Data from previous job ==="
-          echo "Build Version: ${{ needs.build-and-test.outputs.build-version }}"
-          echo "Test Results: ${{ needs.build-and-test.outputs.test-results }}"
-          echo "Artifact Name: ${{ needs.build-and-test.outputs.artifact-name }}"
-          echo ""
           echo "=== Downloaded files ==="
-          ls -la downloaded-build/
-          echo ""
-          echo "=== Build info content ==="
-          cat downloaded-build/build-info.txt
-      
-      # Step 3: Simulate deployment
-      - name: Deploy application
-        id: deploy-step
+          ls -la downloaded/
+          
+          echo "=== File contents ==="
+          cat downloaded/${{ needs.job1.outputs.file-name }}
+          
+          RESULT="Processed at $(date): ${{ needs.job1.outputs.message }}"
+          echo "result=$RESULT" >> $GITHUB_OUTPUT
+          echo "Processing result: $RESULT"
+       
+      # Step 4: Create new artifact with processed data
+      - name: Step 4 - Create processed artifact
         run: |
-          echo "Deploying version ${{ needs.build-and-test.outputs.build-version }}..."
+          mkdir -p processed
           
-          # Simulate deployment process
-          sleep 2
-          
-          # Generate deployment URL
-          DEPLOY_URL="https://app-${{ needs.build-and-test.outputs.build-version }}.example.com"
-          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
-          echo "Deployed to: $DEPLOY_URL"
-      
-      # Step 4: Create deployment report
-      - name: Create deployment report
-        run: |
-          mkdir -p deployment-report
-          cat > deployment-report/deployment-summary.md << EOF
-          # Deployment Report
-          
-          ## Build Information
-          - **Version**: ${{ needs.build-and-test.outputs.build-version }}
-          - **Test Results**: ${{ needs.build-and-test.outputs.test-results }}
-          - **Deployment URL**: ${{ steps.deploy-step.outputs.url }}
-          - **Deployed At**: $(date)
-          - **Commit**: ${GITHUB_SHA}
-          
-          ## Files Deployed
-          \`\`\`
-          $(ls -la downloaded-build/)
-          \`\`\`
-          
-          ## Deployment Status
-          ✅ Successfully deployed to production
+          # Create summary file
+          cat > processed/summary.txt << EOF
+          Original timestamp: ${{ needs.job1.outputs.timestamp }}
+          Original message: ${{ needs.job1.outputs.message }}
+          Processing result: ${{ steps.process.outputs.result }}
+          Processed by: Job 2
           EOF
+          
+          echo "Created processed summary"
       
-      # Step 5: Upload deployment report as artifact
-      - name: Upload deployment report
+      # Step 5: Upload processed artifact
+      - name: Step 5 - Upload processed artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-report-${{ github.run_number }}
-          path: deployment-report/
-          retention-days: 90
+          name: job2-processed
+          path: processed/
 
-  # Third job - Notification (runs after deploy, demonstrates multiple job dependencies)
-  notify:
+  # Job 3: Final summary (depends on both jobs)
+  job3:
     runs-on: ubuntu-latest
-    needs: [build-and-test, deploy]
-    if: always() # Run even if previous jobs fail
+    needs: [job1, job2]
     
     steps:
-      # Step 1: Determine overall status
-      - name: Determine workflow status
-        id: status
-        run: |
-          BUILD_STATUS="${{ needs.build-and-test.result }}"
-          DEPLOY_STATUS="${{ needs.deploy.result }}"
-          
-          if [[ "$BUILD_STATUS" == "success" && "$DEPLOY_STATUS" == "success" ]]; then
-            OVERALL_STATUS="success"
-            STATUS_EMOJI="✅"
-          elif [[ "$BUILD_STATUS" == "failure" || "$DEPLOY_STATUS" == "failure" ]]; then
-            OVERALL_STATUS="failure"
-            STATUS_EMOJI="❌"
-          else
-            OVERALL_STATUS="partial"
-            STATUS_EMOJI="⚠️"
-          fi
-          
-          echo "status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
-          echo "emoji=$STATUS_EMOJI" >> $GITHUB_OUTPUT
+      # Step 1: Download all artifacts
+      - name: Step 1 - Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts/
       
-      # Step 2: Create notification summary (using step output)
-      - name: Create notification
+      # Step 2: Create final summary
+      - name: Step 2 - Create final summary
         run: |
-          echo "${{ steps.status.outputs.emoji }} Workflow completed with status: ${{ steps.status.outputs.status }}"
-          echo ""
-          echo "=== Job Results ==="
-          echo "Build & Test: ${{ needs.build-and-test.result }}"
-          echo "Deploy: ${{ needs.deploy.result }}"
-          echo ""
-          echo "=== Build Information ==="
-          echo "Version: ${{ needs.build-and-test.outputs.build-version }}"
-          echo "Test Results: ${{ needs.build-and-test.outputs.test-results }}"
+          echo "=== Final Summary ==="
+          echo "Job 1 timestamp: ${{ needs.job1.outputs.timestamp }}"
+          echo "Job 1 message: ${{ needs.job1.outputs.message }}"
+          echo "Job 2 result: ${{ needs.job2.outputs.processed-message }}"
           
-          if [[ "${{ needs.deploy.result }}" == "success" ]]; then
-            echo "Deployment URL: ${{ needs.deploy.outputs.deployment-url }}"
-          fi
-      
-      # Step 3: Create final summary artifact
-      - name: Create workflow summary
-        run: |
-          mkdir -p workflow-summary
-          cat > workflow-summary/summary.json << EOF
-          {
-            "workflow_run": "${{ github.run_number }}",
-            "overall_status": "${{ steps.status.outputs.status }}",
-            "build_version": "${{ needs.build-and-test.outputs.build-version }}",
-            "test_results": "${{ needs.build-and-test.outputs.test-results }}",
-            "deployment_url": "${{ needs.deploy.outputs.deployment-url }}",
-            "build_job_status": "${{ needs.build-and-test.result }}",
-            "deploy_job_status": "${{ needs.deploy.result }}",
-            "completed_at": "$(date -Iseconds)"
-          }
+          echo ""
+          echo "=== All downloaded artifacts ==="
+          find all-artifacts/ -type f -exec echo "File: {}" \; -exec cat {} \; -exec echo "" \;
+          
+          mkdir -p final-summary
+          cat > final-summary/workflow-summary.txt << EOF
+          Workflow Summary - Run #${{ github.run_number }}
+          
+          Job 1 outputs:
+          - Timestamp: ${{ needs.job1.outputs.timestamp }}
+          - Message: ${{ needs.job1.outputs.message }}
+          - File: ${{ needs.job1.outputs.file-name }}
+          
+          Job 2 outputs:
+          - Processed: ${{ needs.job2.outputs.processed-message }}
+          
+          All jobs completed successfully!
           EOF
       
-      # Step 4: Upload final summary
-      - name: Upload workflow summary
+      # Step 3: Upload final summary
+      - name: Step 3 - Upload final summary
         uses: actions/upload-artifact@v4
         with:
-          name: workflow-summary-${{ github.run_number }}
-          path: workflow-summary/
-          retention-days: 365
+          name: final-summary
+          path: final-summary/
