@@ -9,7 +9,6 @@ jobs:
 
       - name: Log Vars
         run: |
-
           echo "VAR1: ${{ vars.VAR1}}"
           echo "VAR2: ${{ vars.VAR2}}"
        
