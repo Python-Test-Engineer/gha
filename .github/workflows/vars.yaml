@@ -4,16 +4,13 @@ on: [push]
 jobs:
   log-vars:
     runs-on: ubuntu-latest
-    env:
-      BOOLEAN_SECRET: ${{ secrets.BOOLEAN_SECRET }}
   
-      
     steps:
 
       - name: Log Vars
         run: |
-      
+
           echo "VAR1: ${{ vars.VAR1}}"
           echo "VAR2: ${{ vars.VAR2}}"
-          echo "BOOLEAN_SECRET: ${{ secrets.BOOLEAN_SECRET }}"
+       
    
