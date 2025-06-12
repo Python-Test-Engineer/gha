@@ -58,9 +58,9 @@ jobs:
       - name: Deploy to staging (if not main branch)
         if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
         run: |
-          modal deploy app.py --name my-app-staging
+          modal deploy modal_app.py --name my-app-staging
 
       - name: Deploy to production (if main branch)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
-          modal deploy app.py --name my-app-prod
+          modal deploy modal_app.py --name my-app-prod
