@@ -34,4 +34,4 @@ def process_data(data: dict):
 # For local testing
 if __name__ == "__main__":
     with app.run():
-        print("running modal_app.py in local console...")
+        print(f"{rnd} - running modal_app.py in local console...")
