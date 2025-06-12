@@ -1,13 +1,16 @@
 import modal
 
 # Create Modal app
-app = modal.App("my-app")
+app = modal.App("cw-test-app")
 
 # Define image with dependencies
-image = modal.Image.debian_slim().pip_install([
-    "fastapi",
-    "uvicorn",
-])
+image = modal.Image.debian_slim().pip_install(
+    [
+        "fastapi",
+        "uvicorn",
+    ]
+)
+
 
 @app.function(
     image=image,
@@ -17,11 +20,13 @@ image = modal.Image.debian_slim().pip_install([
 def hello():
     return {"message": "Hello from Modal!"}
 
+
 @app.function(image=image)
 @modal.web_endpoint(method="POST")
 def process_data(data: dict):
     # Your processing logic here
     return {"processed": data, "status": "success"}
+
 
 # For local testing
 if __name__ == "__main__":
