@@ -1,7 +1,10 @@
+import random
 import modal
 
 # Create Modal app
-app = modal.App("cw-test-app")
+rnd = random.randint(1000, 9999)
+app_name = f"cw-{rnd}"
+app = modal.App(app_name)
 
 # Define image with dependencies
 image = modal.Image.debian_slim().pip_install(
