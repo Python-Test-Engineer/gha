@@ -2,65 +2,65 @@ name: Deploy to Modal
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:  # Allow manual triggering
+    branches: [main, master]
+  workflow_dispatch: # Allow manual triggering
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-          
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install modal
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        
-    - name: Authenticate with Modal
-      env:
-        MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
-        MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-      run: |
-        modal token set --token-id $MODAL_TOKEN_ID --token-secret $MODAL_TOKEN_SECRET
-        
-    - name: Deploy to Modal
-      run: |
-        modal deploy app.py
-        
-    # Optional: Run tests before deployment
-    - name: Run tests
-      run: |
-        if [ -f pytest.ini ] || [ -f pyproject.toml ] || [ -d tests ]; then
-          pip install pytest
-          pytest
-        fi
-      continue-on-error: false
 
-    # Optional: Deploy different environments based on branch
-    - name: Deploy to staging (if not main branch)
-      if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
-      run: |
-        modal deploy app.py --name my-app-staging
-        
-    - name: Deploy to production (if main branch)
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      run: |
-        modal deploy app.py --name my-app-prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install modal
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Authenticate with Modal
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          modal token set --token-id $MODAL_TOKEN_ID --token-secret $MODAL_TOKEN_SECRET
+
+      - name: Deploy to Modal
+        run: |
+          modal deploy modal_app.py
+
+      # Optional: Run tests before deployment
+      - name: Run tests
+        run: |
+          if [ -f pytest.ini ] || [ -f pyproject.toml ] || [ -d tests ]; then
+            pip install pytest
+            pytest
+          fi
+        continue-on-error: false
+
+      # Optional: Deploy different environments based on branch
+      - name: Deploy to staging (if not main branch)
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+        run: |
+          modal deploy app.py --name my-app-staging
+
+      - name: Deploy to production (if main branch)
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          modal deploy app.py --name my-app-prod
